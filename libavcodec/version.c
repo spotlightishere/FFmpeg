@@ -33,7 +33,7 @@ unsigned avcodec_version(void)
 {
     static_assert(AV_CODEC_ID_DNXUC        ==   270 &&
                   AV_CODEC_ID_PCM_SGA      == 65572 &&
-                  AV_CODEC_ID_ADPCM_XMD    == 69683 &&
+                  AV_CODEC_ID_ADPCM_XMD    == 69684 &&
                   AV_CODEC_ID_CBD2_DPCM    == 81928 &&
                   AV_CODEC_ID_QOA          == 86121 &&
                   AV_CODEC_ID_ARIB_CAPTION == 94233 &&

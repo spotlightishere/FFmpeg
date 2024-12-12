@@ -1450,25 +1450,37 @@ static int adpcm_decode_frame(AVCodecContext *avctx, AVFrame *frame,
         }
         ) /* End of CASE */
     CASE(ADPCM_IMA_MOBICLIP_WII,
-        for (int subframe = 0; subframe < ceil(buf_size / (channels * 132)); subframe++) {
-          for (int channel = 0; channel < channels; channel++) {
-            ADPCMChannelStatus *cs = &c->status[channel];
-            cs->step_index = sign_extend(bytestream2_get_le16u(&gb), 16);
-            cs->predictor  = sign_extend(bytestream2_get_le16u(&gb), 16);
-            if (cs->step_index > 88u){
-              av_log(avctx, AV_LOG_ERROR, "ERROR: step_index[%d] = %i\n",
-                     channel, cs->step_index);
-              return AVERROR_INVALIDDATA;
-            }
-
-            samples = samples_p[channel] + 256 * subframe;
-            for (int n = 0; n < 256; n += 2) {
-              int v = bytestream2_get_byteu(&gb);
-              *samples++ = adpcm_ima_expand_nibble(&c->status[channel], v & 0x0F, 3);
-              *samples++ = adpcm_ima_expand_nibble(&c->status[channel], v >> 4, 3);
-            }
-          }
+        // Must be aligned to a multiple of 132.
+        // (128 bytes with 2x samples, 2 byte for index, 2 bytes for predictor.)
+        if ((buf_size % 132) != 0) {
+            return AVERROR_INVALIDDATA;
         }
+
+        uint32_t sample_count = buf_size / (channels * 132);
+        assert(nb_samples == buf_size-8);
+
+        for (int subframe = 0; subframe < sample_count; subframe++) {
+            for (int channel = 0; channel < channels; channel++) {
+                ADPCMChannelStatus *cs = &c->status[channel];
+                cs->step_index = sign_extend(bytestream2_get_le16u(&gb), 16);
+                cs->predictor  = sign_extend(bytestream2_get_le16u(&gb), 16);
+                if (cs->step_index > 88u) {
+                    av_log(avctx, AV_LOG_ERROR, "ERROR: step_index[%d] = %i\n",
+                        channel, cs->step_index);
+                    return AVERROR_INVALIDDATA;
+                }
+
+                samples = samples_p[channel] + ((128 * channels) * subframe);
+                for (int n = 0; n < 256; n += 2) {
+                    int byte = bytestream2_get_byteu(&gb);
+                    samples[n    ] = adpcm_ima_qt_expand_nibble(cs, byte & 0xf);
+                    samples[n + 1] = adpcm_ima_qt_expand_nibble(cs, byte >> 4 );
+                }
+            }
+        }
+
+        frame->nb_samples = nb_samples - (sample_count * channels * 4);
+
         ) /* End of CASE */
     CASE(ADPCM_IMA_DAT4,
         for (int channel = 0; channel < channels; channel++) {

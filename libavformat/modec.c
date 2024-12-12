@@ -75,10 +75,12 @@ static int mo_handle_audio(AVStream *ast, uint16_t marker, AVIOContext* pb) {
     case FORMAT_ADPCM:
         ast->codecpar->codec_id = AV_CODEC_ID_ADPCM_IMA_MOBICLIP_WII;
         ast->codecpar->ch_layout = (AVChannelLayout)AV_CHANNEL_LAYOUT_MONO;
+        ast->codecpar->block_align = 128 * ast->codecpar->ch_layout.nb_channels;
         break;
     case FORMAT_ADPCM_STEREO:
         ast->codecpar->codec_id = AV_CODEC_ID_ADPCM_IMA_MOBICLIP_WII;
         ast->codecpar->ch_layout = (AVChannelLayout)AV_CHANNEL_LAYOUT_STEREO;
+        ast->codecpar->block_align = 128 * ast->codecpar->ch_layout.nb_channels;
         break;
     default:
         // Unknown audio type.
@@ -211,7 +213,7 @@ static int mo_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
     MoDemuxContext *mo = s->priv_data;
     AVIOContext *pb = s->pb;
-    int ret;
+    int ret = 0;
 
     // Determine whether audio or video.
     if (mo->handle_audio_packet) {
@@ -224,6 +226,7 @@ static int mo_read_packet(AVFormatContext *s, AVPacket *pkt)
         // Stream 1 is always audio.
         // TODO: adjust for multistream, if applicable
         pkt->stream_index = 1;
+        pkt->flags &= ~AV_PKT_FLAG_CORRUPT;
         mo->handle_audio_packet = 0;
     } else {
         // Dissect the current packet's header.
@@ -232,7 +235,7 @@ static int mo_read_packet(AVFormatContext *s, AVPacket *pkt)
         uint32_t audio_size = chunk_size - video_size - 8;
 
         uint32_t pos = avio_tell(pb) + video_size + audio_size;
-        uint32_t audio_padding = (pos + 4 - (pos % 4)) - pos;
+        uint32_t audio_padding = 4 - (pos % 4);
 
         mo->audio_size = audio_size + audio_padding;
 
@@ -243,6 +246,7 @@ static int mo_read_packet(AVFormatContext *s, AVPacket *pkt)
 
         // Stream 0 is always video.
         pkt->stream_index = 0;
+        pkt->duration = 1;
 
         if (mo->keyframes[mo->current_frame])
           pkt->flags |= AV_PKT_FLAG_KEY;

@@ -1453,6 +1453,7 @@ static int adpcm_decode_frame(AVCodecContext *avctx, AVFrame *frame,
         // Must be aligned to a multiple of 132.
         // (128 bytes with 2x samples, 2 byte for index, 2 bytes for predictor.)
         if ((buf_size % 132) != 0) {
+            av_log(avctx, AV_LOG_ERROR, "buffer not aligned to 132 bytes\n");
             return AVERROR_INVALIDDATA;
         }
 
